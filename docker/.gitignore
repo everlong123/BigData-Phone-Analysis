@@ -1,0 +1,9 @@
+# Bỏ qua thư mục lưu trữ dữ liệu vật lý của MySQL Container
+.mysql_data/
+mysql/data/
+
+# Bỏ qua các file môi trường chứa cấu hình mật khẩu bí mật
+.env
+
+# Bỏ qua các file log hệ thống
+*.log

@@ -1,0 +1,96 @@
+version: "3.8"
+
+# ============================================================
+# BigData Phone Analysis — TV4 Stack
+# Services: MySQL + Apache Superset + Streamlit
+# ============================================================
+
+services:
+
+  # ----------------------------------------------------------
+  # 1. MySQL — nơi lưu dữ liệu điện thoại sạch
+  # ----------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: bigdata_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass123
+      MYSQL_DATABASE: phones_db
+      MYSQL_USER: bigdata_user
+      MYSQL_PASSWORD: bigdata_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init_db:/docker-entrypoint-initdb.d   # đặt file phones_database.sql vào đây để tự động import
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpass123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------
+  # 2. Apache Superset — dashboard trực quan hóa
+  # ----------------------------------------------------------
+  superset:
+    image: apache/superset:3.1.0
+    container_name: bigdata_superset
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SUPERSET_SECRET_KEY: "superset_secret_key_change_me"
+      SUPERSET_ADMIN_USERNAME: admin
+      SUPERSET_ADMIN_PASSWORD: admin123
+      SUPERSET_ADMIN_EMAIL: admin@example.com
+      SUPERSET_ADMIN_FIRSTNAME: Admin
+      SUPERSET_ADMIN_LASTNAME: Superset
+      DATABASE_URL: mysql+mysqlconnector://bigdata_user:bigdata_pass@mysql:3306/phones_db
+    ports:
+      - "8088:8088"
+    volumes:
+      - superset_home:/app/superset_home
+      - ./superset_config.py:/app/pythonpath/superset_config.py
+    command: >
+      bash -c "
+        pip install mysqlclient mysql-connector-python &&
+        superset fab create-admin
+          --username $$SUPERSET_ADMIN_USERNAME
+          --firstname $$SUPERSET_ADMIN_FIRSTNAME
+          --lastname $$SUPERSET_ADMIN_LASTNAME
+          --email $$SUPERSET_ADMIN_EMAIL
+          --password $$SUPERSET_ADMIN_PASSWORD 2>/dev/null || true &&
+        superset db upgrade &&
+        superset init &&
+        superset run -h 0.0.0.0 -p 8088
+      "
+
+  # ----------------------------------------------------------
+  # 3. Streamlit — giao diện tương tác người dùng (GUI)
+  # ----------------------------------------------------------
+  streamlit:
+    build:
+      context: ./streamlit_app
+      dockerfile: Dockerfile
+    container_name: bigdata_streamlit
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: phones_db
+      MYSQL_USER: bigdata_user
+      MYSQL_PASSWORD: bigdata_pass
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./streamlit_app:/app   # hot-reload: sửa code không cần restart
+    command: streamlit run app.py --server.address 0.0.0.0 --server.port 8501
+
+volumes:
+  mysql_data:
+  superset_home:
