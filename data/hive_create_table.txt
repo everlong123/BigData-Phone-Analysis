@@ -1,0 +1,16 @@
+CREATE TABLE phones(
+  product_id string,
+  product_name string,
+  model string,
+  ram string,
+  storage string,
+  original_price bigint,
+  sale_price bigint,
+  stock_status string,
+  phone_condition string,
+  source string,
+  crawl_date string)
+PARTITIONED BY (brand string)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
