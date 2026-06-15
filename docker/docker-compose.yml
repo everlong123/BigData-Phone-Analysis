@@ -20,7 +20,7 @@ services:
       MYSQL_USER: bigdata_user
       MYSQL_PASSWORD: bigdata_pass
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init_db:/docker-entrypoint-initdb.d   # đặt file phones_database.sql vào đây để tự động import
