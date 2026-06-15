@@ -1,166 +1,301 @@
-
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+from pathlib import Path
 
-st.set_page_config(page_title="Big Data Phone Analysis", layout="wide")
-
-@st.cache_data
-def load_data():
-    try:
-        return pd.read_csv("clean_data_result.csv")
-    except Exception:
-        cols = ["product_name","brand","ram","storage","sale_price","source","crawl_date"]
-        return pd.DataFrame(columns=cols)
-
-df = load_data()
-
-st.title("📱 Big Data Phone Market Analysis")
-
-st.sidebar.header("Filters")
-
-if not df.empty:
-    if "brand" in df.columns:
-        brands = sorted(df["brand"].dropna().astype(str).unique())
-        selected_brands = st.sidebar.multiselect("Brand", brands, default=brands)
-        df = df[df["brand"].astype(str).isin(selected_brands)]
-
-    if "sale_price" in df.columns:
-        df["sale_price"] = pd.to_numeric(df["sale_price"], errors="coerce")
-        min_p = int(df["sale_price"].min()) if not df["sale_price"].isna().all() else 0
-        max_p = int(df["sale_price"].max()) if not df["sale_price"].isna().all() else 100000000
-
-        price_range = st.sidebar.slider(
-            "Price Range",
-            min_value=min_p,
-            max_value=max_p,
-            value=(min_p, max_p)
-        )
-
-        df = df[(df["sale_price"] >= price_range[0]) &
-                (df["sale_price"] <= price_range[1])]
-
-search = st.sidebar.text_input("Search Product")
-
-if search and "product_name" in df.columns:
-    df = df[df["product_name"].astype(str).str.contains(search, case=False, na=False)]
-
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["Overview", "Products", "Analytics", "Raw Data"]
+# ==================================================
+# PAGE CONFIG
+# ==================================================
+st.set_page_config(
+    page_title="Phones Data Analysis Dashboard",
+    layout="wide"
 )
 
-with tab1:
+st.title("📱 Phones Data Analysis Dashboard")
 
-    c1, c2, c3, c4 = st.columns(4)
+# ==================================================
+# FILE CONFIG
+# ==================================================
+CSV_PATH = Path("/app/clean_data/clean_data_result.csv")
 
-    c1.metric("Products", len(df))
+COLUMN_NAMES = [
+    "id",
+    "phone_name",
+    "brand",
+    "model",
+    "ram",
+    "rom",
+    "price_original",
+    "price",
+    "stock_status",
+    "condition",
+    "source",
+    "date"
+]
 
-    if "brand" in df.columns:
-        c2.metric("Brands", df["brand"].nunique())
+# ==================================================
+# LOAD DATA
+# ==================================================
+@st.cache_data
+def load_data():
 
-    if "sale_price" in df.columns and len(df):
-        c3.metric("Avg Price", f"{df['sale_price'].mean():,.0f}")
-        c4.metric("Max Price", f"{df['sale_price'].max():,.0f}")
+    if not CSV_PATH.exists():
+        raise FileNotFoundError(
+            f"Cannot find file: {CSV_PATH}"
+        )
 
-with tab2:
+    df = pd.read_csv(
+        CSV_PATH,
+        header=None,
+        names=COLUMN_NAMES
+    )
 
-    st.subheader("Product List")
-    st.dataframe(df, use_container_width=True)
+    # Convert numeric columns
+    df["price_original"] = pd.to_numeric(
+        df["price_original"],
+        errors="coerce"
+    )
 
-with tab3:
+    df["price"] = pd.to_numeric(
+        df["price"],
+        errors="coerce"
+    )
 
-    if not df.empty:
+    # Convert date column
+    df["date"] = pd.to_datetime(
+        df["date"],
+        errors="coerce"
+    )
 
-        col1, col2 = st.columns(2)
+    return df
 
-        if "brand" in df.columns:
-            brand_count = (
-                df.groupby("brand")
-                .size()
-                .reset_index(name="count")
-                .sort_values("count", ascending=False)
-            )
 
-            fig1 = px.bar(
-                brand_count,
-                x="brand",
-                y="count",
-                title="Products by Brand"
-            )
+# ==================================================
+# LOAD DATASET
+# ==================================================
+try:
 
-            col1.plotly_chart(fig1, use_container_width=True)
+    df = load_data()
 
-            fig2 = px.pie(
-                brand_count,
-                names="brand",
-                values="count",
-                title="Brand Distribution"
-            )
+    st.success(
+        f"✅ Loaded successfully: {CSV_PATH}"
+    )
 
-            col2.plotly_chart(fig2, use_container_width=True)
+except Exception as e:
 
-        if "ram" in df.columns and "sale_price" in df.columns:
+    st.error(str(e))
+    st.stop()
 
-            ram_price = (
-                df.groupby("ram")["sale_price"]
-                .mean()
-                .reset_index()
-            )
 
-            fig3 = px.bar(
-                ram_price,
-                x="ram",
-                y="sale_price",
-                title="Average Price by RAM"
-            )
+# ==================================================
+# DEBUG SECTION
+# ==================================================
+with st.expander("System Information"):
 
-            st.plotly_chart(fig3, use_container_width=True)
+    st.write("CSV Path:", CSV_PATH)
+    st.write("Rows:", len(df))
+    st.write("Columns:", len(df.columns))
 
-        if "brand" in df.columns and "sale_price" in df.columns:
 
-            avg_brand = (
-                df.groupby("brand")["sale_price"]
-                .mean()
-                .reset_index()
-                .sort_values("sale_price", ascending=False)
-            )
+# ==================================================
+# SIDEBAR FILTERS
+# ==================================================
+st.sidebar.header("Filters")
 
-            fig4 = px.bar(
-                avg_brand,
-                x="brand",
-                y="sale_price",
-                title="Average Brand Price Ranking"
-            )
+selected_brands = st.sidebar.multiselect(
+    "Brand",
+    options=sorted(df["brand"].dropna().unique()),
+    default=sorted(df["brand"].dropna().unique())
+)
 
-            st.plotly_chart(fig4, use_container_width=True)
+selected_stock = st.sidebar.multiselect(
+    "Stock Status",
+    options=sorted(df["stock_status"].dropna().unique()),
+    default=sorted(df["stock_status"].dropna().unique())
+)
 
-        if "crawl_date" in df.columns:
+selected_sources = st.sidebar.multiselect(
+    "Source",
+    options=sorted(df["source"].dropna().unique()),
+    default=sorted(df["source"].dropna().unique())
+)
 
-            try:
-                temp = df.copy()
-                temp["crawl_date"] = pd.to_datetime(temp["crawl_date"])
+filtered_df = df[
+    (df["brand"].isin(selected_brands))
+    &
+    (df["stock_status"].isin(selected_stock))
+    &
+    (df["source"].isin(selected_sources))
+]
 
-                ts = (
-                    temp.groupby(temp["crawl_date"].dt.date)
-                    .size()
-                    .reset_index(name="count")
-                )
 
-                fig5 = px.line(
-                    ts,
-                    x="crawl_date",
-                    y="count",
-                    title="Time Series Aggregation"
-                )
+# ==================================================
+# KPI CARDS
+# ==================================================
+kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 
-                st.plotly_chart(fig5, use_container_width=True)
+kpi1.metric(
+    "Total Products",
+    f"{len(filtered_df):,}"
+)
 
-            except Exception:
-                pass
+if len(filtered_df) > 0:
 
-with tab4:
-    st.subheader("Dataset Preview")
-    st.write(df.head(50))
+    kpi2.metric(
+        "Average Original Price",
+        f"{filtered_df['price_original'].mean():,.0f} VND"
+    )
 
-st.sidebar.markdown("---")
-st.sidebar.info("Big Data Phone Analysis System")
+    kpi3.metric(
+        "Average Sale Price",
+        f"{filtered_df['price'].mean():,.0f} VND"
+    )
+
+    avg_discount = (
+        filtered_df["price_original"] -
+        filtered_df["price"]
+    ).mean()
+
+    kpi4.metric(
+        "Average Discount",
+        f"{avg_discount:,.0f} VND"
+    )
+
+else:
+
+    kpi2.metric("Average Original Price", "0")
+    kpi3.metric("Average Sale Price", "0")
+    kpi4.metric("Average Discount", "0")
+
+st.divider()
+
+
+# ==================================================
+# CHARTS - ROW 1
+# ==================================================
+col1, col2 = st.columns(2)
+
+with col1:
+
+    st.subheader("📊 Products by Brand")
+
+    if len(filtered_df) > 0:
+
+        brand_counts = (
+            filtered_df["brand"]
+            .value_counts()
+        )
+
+        st.bar_chart(brand_counts)
+
+with col2:
+
+    st.subheader("📈 Average Sale Price by Brand")
+
+    if len(filtered_df) > 0:
+
+        avg_price = (
+            filtered_df
+            .groupby("brand")["price"]
+            .mean()
+            .sort_values(ascending=False)
+        )
+
+        st.line_chart(avg_price)
+
+st.divider()
+
+
+# ==================================================
+# CHARTS - ROW 2
+# ==================================================
+col3, col4 = st.columns(2)
+
+with col3:
+
+    st.subheader("📦 Stock Status Distribution")
+
+    if len(filtered_df) > 0:
+
+        stock_counts = (
+            filtered_df["stock_status"]
+            .value_counts()
+        )
+
+        st.bar_chart(stock_counts)
+
+with col4:
+
+    st.subheader("🏪 Products by Source")
+
+    if len(filtered_df) > 0:
+
+        source_counts = (
+            filtered_df["source"]
+            .value_counts()
+        )
+
+        st.bar_chart(source_counts)
+
+st.divider()
+
+
+# ==================================================
+# PRICE SEGMENT ANALYSIS
+# ==================================================
+st.subheader("💰 Price Segment Analysis")
+
+if len(filtered_df) > 0:
+
+    segment_df = filtered_df.copy()
+
+    segment_df["price_segment"] = pd.cut(
+        segment_df["price"],
+        bins=[
+            0,
+            32000000,
+            37000000,
+            41000000,
+            float("inf")
+        ],
+        labels=[
+            "Mid-range (28-32M)",
+            "Upper Mid (32-37M)",
+            "Premium (37-41M)",
+            "Flagship (41M+)"
+        ]
+    )
+
+    segment_counts = (
+        segment_df["price_segment"]
+        .value_counts()
+        .sort_index()
+    )
+
+    st.bar_chart(segment_counts)
+
+st.divider()
+
+
+# ==================================================
+# DATA TABLE
+# ==================================================
+st.subheader("📋 Product Details")
+
+st.dataframe(
+    filtered_df,
+    use_container_width=True,
+    hide_index=True
+)
+
+# ==================================================
+# DOWNLOAD CSV
+# ==================================================
+csv = filtered_df.to_csv(index=False).encode("utf-8")
+
+st.download_button(
+    label="📥 Download Filtered Data",
+    data=csv,
+    file_name="filtered_phones_data.csv",
+    mime="text/csv"
+)
+

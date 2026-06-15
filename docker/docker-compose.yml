@@ -74,22 +74,30 @@ services:
     build:
       context: ./streamlit_app
       dockerfile: Dockerfile
+
     container_name: bigdata_streamlit
+
     restart: unless-stopped
+
     depends_on:
       mysql:
         condition: service_healthy
+
     environment:
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: phones_db
       MYSQL_USER: bigdata_user
       MYSQL_PASSWORD: bigdata_pass
+
     ports:
       - "8501:8501"
+
     volumes:
-      - ./streamlit_app:/app   # hot-reload: sửa code không cần restart
-    command: streamlit run app.py --server.address 0.0.0.0 --server.port 8501
+      - ./streamlit_app:/app
+      - ../clean_data:/app/clean_data
+
+    command: streamlit run /app/app.py --server.address 0.0.0.0 --server.port 8501
 
 volumes:
   mysql_data:
